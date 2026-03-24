@@ -19,13 +19,12 @@ COLORS = {
     "Strategy/Business": "#E6A817",
     "Unknown": "#404040",
 }
-YEARS = list(range(2015, 2025))
 
 
-def prepare_publication_df(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_publication_df(df: pd.DataFrame, start_year: int, end_year: int) -> pd.DataFrame:
     out = df.copy()
     out["year_int"] = pd.to_numeric(out["year"], errors="coerce").astype("Int64")
-    out = out[out["year_int"].between(2015, 2024)].copy()
+    out = out[out["year_int"].between(start_year, end_year)].copy()
     out["category"] = out["termination_category"].fillna("Unknown")
     out["is_p2"] = out["phase"].astype(str).str.contains("2", na=False)
     out["is_p3"] = out["phase"].astype(str).str.contains("3", na=False)
@@ -39,12 +38,12 @@ def figure_to_png_bytes(fig: plt.Figure) -> bytes:
     return buffer.getvalue()
 
 
-def generate_figure_1(df: pd.DataFrame) -> plt.Figure:
+def generate_figure_1(df: pd.DataFrame, years: list[int]) -> plt.Figure:
     fig, (ax_a, ax_b) = plt.subplots(2, 1, figsize=(9, 7), gridspec_kw={"height_ratios": [2.5, 0.8]})
     fig.patch.set_facecolor("white")
 
-    yearly_total = df.groupby("year_int").size().reindex(YEARS, fill_value=0)
-    bars = ax_a.bar(YEARS, yearly_total.values, color="#3A6EA5", width=0.65, edgecolor="white", linewidth=0.5)
+    yearly_total = df.groupby("year_int").size().reindex(years, fill_value=0)
+    bars = ax_a.bar(years, yearly_total.values, color="#3A6EA5", width=0.65, edgecolor="white", linewidth=0.5)
     for bar, val in zip(bars, yearly_total.values):
         ax_a.text(
             bar.get_x() + bar.get_width() / 2,
@@ -57,8 +56,8 @@ def generate_figure_1(df: pd.DataFrame) -> plt.Figure:
             color="#222",
         )
     ax_a.set_ylabel("Number of terminated trials", fontsize=10)
-    ax_a.set_xticks(YEARS)
-    ax_a.set_xticklabels([str(y) for y in YEARS], fontsize=9)
+    ax_a.set_xticks(years)
+    ax_a.set_xticklabels([str(y) for y in years], fontsize=9)
     ax_a.set_xlabel("Year", fontsize=10)
     ax_a.set_ylim(0, max(1, yearly_total.max()) * 1.18)
     ax_a.spines["top"].set_visible(False)
@@ -114,7 +113,7 @@ def generate_figure_1(df: pd.DataFrame) -> plt.Figure:
     return fig
 
 
-def generate_figure_2(df: pd.DataFrame) -> plt.Figure:
+def generate_figure_2(df: pd.DataFrame, years: list[int]) -> plt.Figure:
     p2 = df[df["is_p2"]].copy()
     p3 = df[df["is_p3"]].copy()
 
@@ -123,7 +122,7 @@ def generate_figure_2(df: pd.DataFrame) -> plt.Figure:
             phase_df.groupby(["year_int", "category"])
             .size()
             .unstack(fill_value=0)
-            .reindex(index=YEARS, columns=CATEGORIES, fill_value=0)
+            .reindex(index=years, columns=CATEGORIES, fill_value=0)
         )
         totals = counts.sum(axis=1)
         pcts = counts.div(totals.replace(0, 1), axis=0).multiply(100)
@@ -140,21 +139,21 @@ def generate_figure_2(df: pd.DataFrame) -> plt.Figure:
     ax_b = fig.add_subplot(gs_top[1])
 
     def draw_stacked_bars(ax: plt.Axes, totals: pd.Series, pcts: pd.DataFrame, phase_label: str, letter: str) -> None:
-        bottoms = np.zeros(len(YEARS))
+        bottoms = np.zeros(len(years))
         for cat in CATEGORIES:
             vals = pcts[cat].values
-            ax.bar(YEARS, vals, bottom=bottoms, color=COLORS[cat], width=0.65, edgecolor="white", linewidth=0.4, label=cat)
+            ax.bar(years, vals, bottom=bottoms, color=COLORS[cat], width=0.65, edgecolor="white", linewidth=0.4, label=cat)
             for xi, (bot, val) in enumerate(zip(bottoms, vals)):
                 if val >= 0.9:
                     text_color = "black" if cat == "Strategy/Business" else "white"
-                    ax.text(YEARS[xi], bot + val / 2, f"{val:.1f}", ha="center", va="center", fontsize=5.5, color=text_color, fontweight="bold")
+                    ax.text(years[xi], bot + val / 2, f"{val:.1f}", ha="center", va="center", fontsize=5.5, color=text_color, fontweight="bold")
             bottoms += vals
         for xi, tot in enumerate(totals.values):
-            ax.text(YEARS[xi], bottoms[xi] + 0.5, str(int(tot)), ha="center", va="bottom", fontsize=8, fontweight="bold", color="#222")
+            ax.text(years[xi], bottoms[xi] + 0.5, str(int(tot)), ha="center", va="bottom", fontsize=8, fontweight="bold", color="#222")
         ax.set_ylabel(f"Percentage of {phase_label}\nterminations", fontsize=10)
-        ax.set_xticks(YEARS)
-        ax.set_xticklabels([str(y) for y in YEARS], fontsize=9)
-        ax.set_xlim(min(YEARS) - 0.6, max(YEARS) + 0.6)
+        ax.set_xticks(years)
+        ax.set_xticklabels([str(y) for y in years], fontsize=9)
+        ax.set_xlim(min(years) - 0.6, max(years) + 0.6)
         ax.set_ylim(0, 115)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -174,12 +173,13 @@ def generate_figure_2(df: pd.DataFrame) -> plt.Figure:
         ax = fig.add_subplot(gs_bot[pos])
         p2_line = p2_pcts[cat].values
         p3_line = p3_pcts[cat].values
-        ax.plot(YEARS, p2_line, color="#3A6EA5", linewidth=1.8, marker="o", markersize=4)
-        ax.plot(YEARS, p3_line, color="#C0504D", linewidth=1.8, marker="s", markersize=4)
+        ax.plot(years, p2_line, color="#3A6EA5", linewidth=1.8, marker="o", markersize=4)
+        ax.plot(years, p3_line, color="#C0504D", linewidth=1.8, marker="s", markersize=4)
         ax.set_title(cat, fontsize=10, fontweight="bold")
         ax.set_ylabel("% of terminations", fontsize=8)
-        ax.set_xticks(YEARS[::2])
-        ax.set_xticklabels([str(y) for y in YEARS[::2]], fontsize=8)
+        x_tick_years = years[::2] if len(years) > 4 else years
+        ax.set_xticks(x_tick_years)
+        ax.set_xticklabels([str(y) for y in x_tick_years], fontsize=8)
         ymax = max(float(np.max(p2_line)), float(np.max(p3_line)))
         ax.set_ylim(0, ymax * 1.35 if ymax > 0 else 1)
         ax.spines["top"].set_visible(False)

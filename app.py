@@ -154,9 +154,10 @@ if run:
                 col3.metric("Unknown Category Share", f"{unknown_share:.1f}%")
 
                 st.subheader("Visualizations")
-                pub_df = prepare_publication_df(filtered_df)
-                fig1 = generate_figure_1(pub_df)
-                fig2 = generate_figure_2(pub_df)
+                selected_years = list(range(start_year, end_year + 1))
+                pub_df = prepare_publication_df(filtered_df, start_year=start_year, end_year=end_year)
+                fig1 = generate_figure_1(pub_df, years=selected_years)
+                fig2 = generate_figure_2(pub_df, years=selected_years)
                 fig1_png = figure_to_png_bytes(fig1)
                 fig2_png = figure_to_png_bytes(fig2)
                 plt.close(fig1)
